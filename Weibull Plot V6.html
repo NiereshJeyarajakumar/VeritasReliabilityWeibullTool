@@ -1,0 +1,328 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Weibull Distribution Visualizer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  max-width: 950px;
+  margin: 30px auto;
+  color: #000;
+}
+.card {
+  background: transparent;
+  border: 1px solid #000;
+  border-radius: 8px;
+  padding: 0;
+  margin: 12px 0;
+  overflow: hidden;
+}
+
+/* ✅ HEADER STYLE */
+.card h3 {
+  margin: 0;
+  padding: 12px 18px;
+  background: #0B1C36;
+  color: #C2965B;
+  font-weight: 700;
+}
+
+/* Inner padding for card content */
+.card > *:not(h3) {
+  padding: 18px;
+}
+
+input[type=number] {
+  width: 100px;
+  padding: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  margin: 0 6px;
+}
+
+/* ✅ Buttons not bold */
+button {
+  background: #C2965B;
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 400;
+}
+button:hover { opacity:.9 }
+
+/* Tabs */
+.tabs { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px }
+.tabs button {
+  background:#C2965B;color:#000;border:none;border-radius:999px;
+  padding:8px 14px;font-weight:400;cursor:pointer;
+}
+.tabs button.active { background:#000;color:#fff }
+
+/* Plot title */
+.plot-title {
+  font-weight:700;margin:10px 0 5px;text-align:center;font-size:16px;
+}
+
+#exportBtn { margin-top:10px;background:#C2965B;color:#000 }
+
+th {
+  text-align: left;
+  font-weight: 700;
+  padding-bottom: 4px;
+}
+td { padding: 4px 0 }
+</style>
+</head>
+
+<body>
+
+<div class="card">
+  <h3>Weibull Distributions</h3>
+  <div>
+    <p>Enter up to three Weibull distributions and select which to display on the plots.</p>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:10px">
+      <thead>
+        <tr>
+          <th style="width:20%">Display</th>
+          <th>η (Scale)</th>
+          <th>β (Shape)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><input type="checkbox" id="use1" checked></td>
+          <td><input type="number" id="e1" value="1000" step="1"></td>
+          <td><input type="number" id="b1" value="1.5" step="0.01"></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox" id="use2"></td>
+          <td><input type="number" id="e2" value="1200" step="1"></td>
+          <td><input type="number" id="b2" value="2.5" step="0.01"></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox" id="use3"></td>
+          <td><input type="number" id="e3" value="800" step="1"></td>
+          <td><input type="number" id="b3" value="4.0" step="0.01"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:12px">
+      <button id="plotBtn" type="button">Plot Distributions</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="resultsCard" style="margin-top:16px;">
+  <h3>Results (MTBF)</h3>
+  <div>
+    <table style="width:100%;border-collapse:collapse;margin-top:10px">
+      <thead>
+        <tr>
+          <th>Distribution</th>
+          <th>β (Shape)</th>
+          <th>η (Scale)</th>
+          <th>MTBF</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody">
+        <tr><td>Dist 1</td><td>–</td><td>–</td><td>–</td></tr>
+        <tr><td>Dist 2</td><td>–</td><td>–</td><td>–</td></tr>
+        <tr><td>Dist 3</td><td>–</td><td>–</td><td>–</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Plots</h3>
+  <div>
+    <div class="tabs">
+      <button data-target="pdf" class="active">PDF</button>
+      <button data-target="cdf">CDF</button>
+      <button data-target="rel">Reliability</button>
+      <button data-target="haz">Hazard</button>
+    </div>
+
+    <div class="plot-title" id="pdf-title">Probability Density Function</div>
+    <canvas id="pdf" height="260"></canvas>
+
+    <div class="plot-title" id="cdf-title">Cumulative Distribution Function</div>
+    <canvas id="cdf" height="260"></canvas>
+
+    <div class="plot-title" id="rel-title">Reliability Function</div>
+    <canvas id="rel" height="260"></canvas>
+
+    <div class="plot-title" id="haz-title">Hazard Rate Function</div>
+    <canvas id="haz" height="260"></canvas>
+
+    <button id="exportBtn" type="button">Download Plot</button>
+  </div>
+</div>
+
+<script>
+const byId = id => document.getElementById(id);
+const colors = ["#000", "#C2965B", "#2b6cb0"];
+let charts = {};
+let panels = ["pdf", "cdf", "rel", "haz"];
+
+// Gamma (Lanczos)
+function gamma(x){
+  const p=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,
+    -176.61502916214059,12.507343278686905,-0.13857109526572012,
+    9.9843695780195716e-6,1.5056327351493116e-7];
+  let g=7;
+  if(x<0.5) return Math.PI/Math.sin(Math.PI*x)/gamma(1-x);
+  x-=1;
+  let a=p[0],t=x+g+0.5;
+  for(let i=1;i<g+2;i++) a+=p[i]/(x+i);
+  return Math.sqrt(2*Math.PI)*Math.pow(t,x+0.5)*Math.exp(-t)*a;
+}
+
+function destroyChart(id){
+  const ex = Chart.getChart(id);
+  if(ex) ex.destroy();
+}
+
+function showPanel(id){
+  panels.forEach(p=>{
+    const active = (p===id);
+    byId(p).style.display = active ? "block" : "none";
+    byId(`${p}-title`).style.display = active ? "block" : "none";
+    document.querySelector(`button[data-target="${p}"]`).classList.toggle("active", active);
+    if(charts[p]){ charts[p].resize(); charts[p].update(); }
+  });
+}
+
+function plotDistributions(){
+  const dist=[];
+  for(let i=1;i<=3;i++){
+    if(byId("use"+i).checked){
+      const beta=parseFloat(byId("b"+i).value);
+      const eta=parseFloat(byId("e"+i).value);
+      if(isFinite(beta)&&isFinite(eta)&&beta>0&&eta>0)
+        dist.push({beta,eta,color:colors[i-1],label:`Dist ${i}`});
+    }
+  }
+  if(!dist.length){ alert("Select at least one distribution."); return; }
+
+  const resultsBody = byId("resultsBody");
+  resultsBody.innerHTML = "";
+
+  dist.forEach(d=>{
+    const mtbf = d.eta * gamma(1+1/d.beta);
+    resultsBody.insertAdjacentHTML("beforeend",
+      `<tr><td>${d.label}</td><td>${d.beta.toFixed(3)}</td><td>${d.eta.toFixed(3)}</td><td>${mtbf.toFixed(3)}</td></tr>`);
+  });
+
+  for(let j=dist.length+1;j<=3;j++){
+    resultsBody.insertAdjacentHTML("beforeend",
+      `<tr><td>Dist ${j}</td><td>–</td><td>–</td><td>–</td></tr>`);
+  }
+
+  const tmax = Math.max(...dist.map(d=>d.eta)) * 3;
+  const X = Array.from({length:200},(_,i)=>tmax*i*i/(199**2));
+
+  const makeData=(d)=>{
+    return X.map(t=>{
+      const z = (t/d.eta)**d.beta;
+      const R = Math.exp(-z);
+      return {
+        pdf: (d.beta/d.eta)*(t/d.eta)**(d.beta-1)*R,
+        cdf: 1-R,
+        rel: R,
+        haz: (d.beta/d.eta)*(t/d.eta)**(d.beta-1)
+      };
+    });
+  };
+
+  const pdfData=[],cdfData=[],relData=[],hazData=[];
+
+  dist.forEach(d=>{
+    const Y = makeData(d);
+    pdfData.push({data:X.map((t,i)=>({x:t,y:Y[i].pdf})),label:d.label,borderColor:d.color,backgroundColor:d.color,borderWidth:2});
+    cdfData.push({data:X.map((t,i)=>({x:t,y:Y[i].cdf})),label:d.label,borderColor:d.color,backgroundColor:d.color,borderWidth:2});
+    relData.push({data:X.map((t,i)=>({x:t,y:Y[i].rel})),label:d.label,borderColor:d.color,backgroundColor:d.color,borderWidth:2});
+    hazData.push({data:X.map((t,i)=>({x:t,y:Y[i].haz})),label:d.label,borderColor:d.color,backgroundColor:d.color,borderWidth:2});
+  });
+
+  const baseOpts={
+    responsive:true,
+    parsing:false,
+    plugins:{
+      legend:{
+        display:true,
+        labels:{
+          usePointStyle:true,
+          pointStyle:'rectFilled', /* ✅ full-colour legend */
+          boxWidth:18,
+          boxHeight:12
+        }
+      }
+    },
+    scales:{
+      x:{type:"linear",title:{display:true,text:"Time"}},
+      y:{title:{display:true}}
+    }
+  };
+
+  destroyChart("pdf");
+  charts.pdf = new Chart(byId("pdf"),{type:"line",data:{datasets:pdfData},options:JSON.parse(JSON.stringify(baseOpts))});
+  charts.pdf.options.scales.y.title.text="PDF";
+
+  destroyChart("cdf");
+  charts.cdf = new Chart(byId("cdf"),{type:"line",data:{datasets:cdfData},options:JSON.parse(JSON.stringify(baseOpts))});
+  charts.cdf.options.scales.y.title.text="CDF";
+
+  destroyChart("rel");
+  charts.rel = new Chart(byId("rel"),{type:"line",data:{datasets:relData},options:JSON.parse(JSON.stringify(baseOpts))});
+  charts.rel.options.scales.y.title.text="Reliability";
+
+  destroyChart("haz");
+  charts.haz = new Chart(byId("haz"),{type:"line",data:{datasets:hazData},options:JSON.parse(JSON.stringify(baseOpts))});
+  charts.haz.options.scales.y.title.text="Hazard";
+
+  showPanel(document.querySelector(".tabs button.active").dataset.target);
+}
+
+function initEmptyCharts(){
+  const emptyData={datasets:[]};
+  const baseOpts={
+    responsive:true,
+    parsing:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{type:"linear"},y:{}}
+  };
+
+  charts.pdf = new Chart(byId("pdf"),{type:"line",data:emptyData,options:baseOpts});
+  charts.cdf = new Chart(byId("cdf"),{type:"line",data:emptyData,options:baseOpts});
+  charts.rel = new Chart(byId("rel"),{type:"line",data:emptyData,options:baseOpts});
+  charts.haz = new Chart(byId("haz"),{type:"line",data:emptyData,options:baseOpts});
+}
+
+initEmptyCharts();
+byId("plotBtn").addEventListener("click",plotDistributions);
+
+document.querySelectorAll(".tabs button").forEach(btn=>{
+  btn.addEventListener("click",()=>showPanel(btn.dataset.target));
+});
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const active = document.querySelector(".tabs button.active")?.dataset.target;
+  if(!active||!charts[active]) return alert("No active chart");
+  const link=document.createElement("a");
+  link.download=active+"_plot.png";
+  link.href=charts[active].toBase64Image();
+  link.click();
+});
+
+showPanel("pdf");
+</script>
+
+</body>
+</html>
