@@ -402,19 +402,23 @@ byId("exportBtn").addEventListener("click", () => {
 
 showPanel("pdf");
 </script>
-<script>
+
+  <script>
   function sendHeight() {
     const height = document.documentElement.scrollHeight;
-    parent.postMessage({ height: height }, "*");
+    window.parent.postMessage(
+      { height: height },
+      "*"
+    );
   }
 
-  // Send height on load
+  // Send on load
   window.addEventListener("load", sendHeight);
 
-  // Send height on resize
+  // Send on resize
   window.addEventListener("resize", sendHeight);
 
-  // Send height when DOM changes (charts, toggles, results)
+  // Optional: send after dynamic changes (charts, toggles, etc.)
   const observer = new MutationObserver(sendHeight);
   observer.observe(document.body, {
     childList: true,
@@ -424,4 +428,5 @@ showPanel("pdf");
 </script>
 </body>
 </html>
+
 
